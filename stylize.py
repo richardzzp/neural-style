@@ -7,41 +7,31 @@ from collections import OrderedDict
 from PIL import Image
 import numpy as np
 import tensorflow as tf
-
+from functools import reduce
 import vgg
-
 
 CONTENT_LAYERS = ('relu4_2', 'relu5_2')
 STYLE_LAYERS = ('relu1_1', 'relu2_1', 'relu3_1', 'relu4_1', 'relu5_1')
 
 
-try:
-    reduce
-except NameError:
-    from functools import reduce
-
-
 def get_loss_vals(loss_store):
-    return OrderedDict((key, val.eval()) for key,val in loss_store.items())
+    return OrderedDict((key, val.eval()) for key, val in loss_store.items())
 
 
 def print_progress(loss_vals):
-    for key,val in loss_vals.items():
+    for key, val in loss_vals.items():
         print('{:>13s} {:g}'.format(key + ' loss:', val))
 
 
-def stylize(network, content, styles, preserve_colors, iterations,
-        content_weight, content_weight_blend, style_weight, style_layer_weight_exp, style_blend_weights, tv_weight,
-        learning_rate, beta1, beta2, epsilon, pooling,
-        print_iterations=None, checkpoint_iterations=None):
+def stylize(network, content, styles, iterations,
+            content_weight, content_weight_blend, style_weight, style_layer_weight_exp, style_blend_weights, tv_weight,
+            learning_rate, beta1, beta2, epsilon, pooling):
     """
     Stylize images.
 
     This function yields tuples (iteration, image, loss_vals) at every
-    iteration. However `image` and `loss_vals` are None by default. Each
-    `checkpoint_iterations`, `image` is not None. Each `print_iterations`,
+    iteration. However `image` and `loss_vals` are None by default. Each, `image` is not None. Each ,
     `loss_vals` is not None.
-
     `loss_vals` is a dict with loss values for the current iteration, e.g.
     ``{'content': 1.23, 'style': 4.56, 'tv': 7.89, 'total': 13.68}``.
 
@@ -89,7 +79,6 @@ def stylize(network, content, styles, preserve_colors, iterations,
                 gram = np.matmul(features.T, features) / features.size
                 style_features[i][layer] = gram
 
-
     # make stylized image using backpropogation
     with tf.Graph().as_default():
         noise = np.random.normal(size=shape, scale=np.std(content) * 0.1)
@@ -106,8 +95,9 @@ def stylize(network, content, styles, preserve_colors, iterations,
         content_losses = []
         for content_layer in CONTENT_LAYERS:
             content_losses.append(content_layers_weights[content_layer] * content_weight * (2 * tf.nn.l2_loss(
-                    net[content_layer] - content_features[content_layer]) /
-                    content_features[content_layer].size))
+                net[content_layer] - content_features[content_layer]) /
+                                                                                            content_features[
+                                                                                                content_layer].size))
         content_loss += reduce(tf.add, content_losses)
 
         # style loss
@@ -121,17 +111,18 @@ def stylize(network, content, styles, preserve_colors, iterations,
                 feats = tf.reshape(layer, (-1, number))
                 gram = tf.matmul(tf.transpose(feats), feats) / size
                 style_gram = style_features[i][style_layer]
-                style_losses.append(style_layers_weights[style_layer] * 2 * tf.nn.l2_loss(gram - style_gram) / style_gram.size)
+                style_losses.append(
+                    style_layers_weights[style_layer] * 2 * tf.nn.l2_loss(gram - style_gram) / style_gram.size)
             style_loss += style_weight * style_blend_weights[i] * reduce(tf.add, style_losses)
 
         # total variation denoising
-        tv_y_size = _tensor_size(image[:,1:,:,:])
-        tv_x_size = _tensor_size(image[:,:,1:,:])
+        tv_y_size = _tensor_size(image[:, 1:, :, :])
+        tv_x_size = _tensor_size(image[:, :, 1:, :])
         tv_loss = tv_weight * 2 * (
-                (tf.nn.l2_loss(image[:,1:,:,:] - image[:,:shape[1]-1,:,:]) /
-                    tv_y_size) +
-                (tf.nn.l2_loss(image[:,:,1:,:] - image[:,:,:shape[2]-1,:]) /
-                    tv_x_size))
+            (tf.nn.l2_loss(image[:, 1:, :, :] - image[:, :shape[1] - 1, :, :]) /
+             tv_y_size) +
+            (tf.nn.l2_loss(image[:, :, 1:, :] - image[:, :, :shape[2] - 1, :]) /
+             tv_x_size))
 
         # total loss
         loss = content_loss + style_loss + tv_loss
@@ -163,8 +154,6 @@ def stylize(network, content, styles, preserve_colors, iterations,
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             print('Optimization started...')
-            if (print_iterations and print_iterations != 0):
-                print_progress(get_loss_vals(loss_store))
             iteration_times = []
             start = time.time()
             for i in range(iterations):
@@ -184,54 +173,23 @@ def stylize(network, content, styles, preserve_colors, iterations,
                 train_step.run()
 
                 last_step = (i == iterations - 1)
-                if last_step or (print_iterations and i % print_iterations == 0):
+                if last_step:
                     loss_vals = get_loss_vals(loss_store)
                     print_progress(loss_vals)
                 else:
                     loss_vals = None
 
-                if (checkpoint_iterations and i % checkpoint_iterations == 0) or last_step:
+                if last_step:
                     this_loss = loss.eval()
                     if this_loss < best_loss:
                         best_loss = this_loss
                         best = image.eval()
 
                     img_out = vgg.unprocess(best.reshape(shape[1:]), vgg_mean_pixel)
-
-                    if preserve_colors and preserve_colors == True:
-                        original_image = np.clip(content, 0, 255)
-                        styled_image = np.clip(img_out, 0, 255)
-
-                        # Luminosity transfer steps:
-                        # 1. Convert stylized RGB->grayscale accoriding to Rec.601 luma (0.299, 0.587, 0.114)
-                        # 2. Convert stylized grayscale into YUV (YCbCr)
-                        # 3. Convert original image into YUV (YCbCr)
-                        # 4. Recombine (stylizedYUV.Y, originalYUV.U, originalYUV.V)
-                        # 5. Convert recombined image from YUV back to RGB
-
-                        # 1
-                        styled_grayscale = rgb2gray(styled_image)
-                        styled_grayscale_rgb = gray2rgb(styled_grayscale)
-
-                        # 2
-                        styled_grayscale_yuv = np.array(Image.fromarray(styled_grayscale_rgb.astype(np.uint8)).convert('YCbCr'))
-
-                        # 3
-                        original_yuv = np.array(Image.fromarray(original_image.astype(np.uint8)).convert('YCbCr'))
-
-                        # 4
-                        w, h, _ = original_image.shape
-                        combined_yuv = np.empty((w, h, 3), dtype=np.uint8)
-                        combined_yuv[..., 0] = styled_grayscale_yuv[..., 0]
-                        combined_yuv[..., 1] = original_yuv[..., 1]
-                        combined_yuv[..., 2] = original_yuv[..., 2]
-
-                        # 5
-                        img_out = np.array(Image.fromarray(combined_yuv, 'YCbCr').convert('RGB'))
                 else:
                     img_out = None
 
-                yield i+1 if last_step else i, img_out, loss_vals
+                yield i + 1 if last_step else i, img_out, loss_vals
 
                 iteration_end = time.time()
                 iteration_times.append(iteration_end - iteration_start)
@@ -241,14 +199,17 @@ def _tensor_size(tensor):
     from operator import mul
     return reduce(mul, (d.value for d in tensor.get_shape()), 1)
 
+
 def rgb2gray(rgb):
-    return np.dot(rgb[...,:3], [0.299, 0.587, 0.114])
+    return np.dot(rgb[..., :3], [0.299, 0.587, 0.114])
+
 
 def gray2rgb(gray):
     w, h = gray.shape
     rgb = np.empty((w, h, 3), dtype=np.float32)
     rgb[:, :, 2] = rgb[:, :, 1] = rgb[:, :, 0] = gray
     return rgb
+
 
 def hms(seconds):
     seconds = int(seconds)

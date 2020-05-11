@@ -64,7 +64,6 @@ def main():
         network=VGG_PATH,
         content=content_image,
         styles=style_images,
-        preserve_colors=None,
         iterations=ITERATIONS,
         content_weight=CONTENT_WEIGHT,
         content_weight_blend=CONTENT_WEIGHT_BLEND,
@@ -77,8 +76,6 @@ def main():
         beta2=BETA2,
         epsilon=EPSILON,
         pooling=POOLING,
-        print_iterations=None,
-        checkpoint_iterations=None,
     ):
         continue
 
