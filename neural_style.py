@@ -30,6 +30,10 @@ POOLING = 'max'
 
 
 def build_parser():
+    """
+    构建命令行参数（删除自己读取）
+    :return:
+    """
     parser = ArgumentParser()
     parser.add_argument('--content',
             dest='content', help='content image',
@@ -148,10 +152,10 @@ def main():
     parser = build_parser()
     options = parser.parse_args()
 
-    if not os.path.isfile(options.network):
+    if not os.path.isfile(options.network): #判断那个贼大的文件是否存在
         parser.error("Network %s does not exist. (Did you forget to "
                      "download it?)" % options.network)
-
+    #没必要的参数能删就删
     if [options.checkpoint_iterations,
         options.checkpoint_output].count(None) == 1:
         parser.error("use either both of checkpoint_output and "
@@ -167,7 +171,7 @@ def main():
     content_image = imread(options.content)
     style_images = [imread(style) for style in options.styles]
 
-    width = options.width
+    width = options.width  #这个参数也没必要
     if width is not None:
         new_shape = (int(math.floor(float(content_image.shape[0]) /
                 content_image.shape[1] * width)), width)
