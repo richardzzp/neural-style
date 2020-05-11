@@ -30,7 +30,7 @@ def print_progress(loss_vals):
         print('{:>13s} {:g}'.format(key + ' loss:', val))
 
 
-def stylize(network, initial, initial_noiseblend, content, styles, preserve_colors, iterations,
+def stylize(network, content, styles, preserve_colors, iterations,
         content_weight, content_weight_blend, style_weight, style_layer_weight_exp, style_blend_weights, tv_weight,
         learning_rate, beta1, beta2, epsilon, pooling,
         print_iterations=None, checkpoint_iterations=None):
@@ -89,18 +89,11 @@ def stylize(network, initial, initial_noiseblend, content, styles, preserve_colo
                 gram = np.matmul(features.T, features) / features.size
                 style_features[i][layer] = gram
 
-    initial_content_noise_coeff = 1.0 - initial_noiseblend
 
     # make stylized image using backpropogation
     with tf.Graph().as_default():
-        if initial is None:
-            noise = np.random.normal(size=shape, scale=np.std(content) * 0.1)
-            initial = tf.random_normal(shape) * 0.256
-        else:
-            initial = np.array([vgg.preprocess(initial, vgg_mean_pixel)])
-            initial = initial.astype('float32')
-            noise = np.random.normal(size=shape, scale=np.std(content) * 0.1)
-            initial = (initial) * initial_content_noise_coeff + (tf.random_normal(shape) * 0.256) * (1.0 - initial_content_noise_coeff)
+        noise = np.random.normal(size=shape, scale=np.std(content) * 0.1)
+        initial = tf.random_normal(shape) * 0.256
         image = tf.Variable(initial)
         net = vgg.net_preloaded(vgg_weights, image, pooling)
 
