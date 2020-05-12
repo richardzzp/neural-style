@@ -21,7 +21,8 @@ VGG19_LAYERS = (
     'relu5_3', 'conv5_4', 'relu5_4'
 )
 
-##我们需要的信息是每层神经网络的kernels和bias
+
+# 我们需要的信息是每层神经网络的kernels和bias
 def load_net(data_path):
     data = scipy.io.loadmat(data_path)
     if 'normalization' in data:
@@ -34,6 +35,7 @@ def load_net(data_path):
         mean_pixel = data['meta']['normalization'][0][0][0][0][2][0][0]
     weights = data['layers'][0]
     return weights, mean_pixel
+
 
 def net_preloaded(weights, input_image, pooling):
     net = {}
@@ -49,7 +51,7 @@ def net_preloaded(weights, input_image, pooling):
                 kernels, bias = weights[i][0][0][2][0]
             # matconvnet: weights are [width, height, in_channels, out_channels]
             # tensorflow: weights are [height, width, in_channels, out_channels]
-            kernels = np.transpose(kernels, (1, 0, 2, 3))  #因为tf和mat的weights位置不一样，所以要进行转置
+            kernels = np.transpose(kernels, (1, 0, 2, 3))  # 因为tf和mat的weights位置不一样，所以要进行转置
             bias = bias.reshape(-1)
             current = _conv_layer(current, kernels, bias)
         elif kind == 'relu':
@@ -61,19 +63,21 @@ def net_preloaded(weights, input_image, pooling):
     assert len(net) == len(VGG19_LAYERS)
     return net
 
+
 def _conv_layer(input, weights, bias):
     conv = tf.nn.conv2d(input, tf.constant(weights), strides=(1, 1, 1, 1),
-            padding='SAME')
+                        padding='SAME')
     return tf.nn.bias_add(conv, bias)
 
 
 def _pool_layer(input, pooling):
     if pooling == 'avg':
         return tf.nn.avg_pool(input, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1),
-                padding='SAME')
+                              padding='SAME')
     else:
         return tf.nn.max_pool(input, ksize=(1, 2, 2, 1), strides=(1, 2, 2, 1),
-                padding='SAME')
+                              padding='SAME')
+
 
 def preprocess(image, mean_pixel):
     return image - mean_pixel
