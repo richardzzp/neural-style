@@ -12,8 +12,8 @@ CONTENT_LAYERS = ('relu4_2', 'relu5_2')
 STYLE_LAYERS = ('relu1_1', 'relu2_1', 'relu3_1', 'relu4_1', 'relu5_1')
 
 
-def stylize(network, content, styles, iterations,
-            content_weight, content_weight_blend, style_weight, style_layer_weight_exp, style_blend_weights, tv_weight,
+def stylize(network, content, style, iterations,
+            content_weight, content_weight_blend, style_weight, style_layer_weight_exp, tv_weight,
             learning_rate, beta1, beta2, epsilon, pooling):
     """
     Stylize images.
@@ -26,9 +26,9 @@ def stylize(network, content, styles, iterations,
     :rtype: iterator[tuple[int,image]]
     """
     shape = (1,) + content.shape  # 若content.shape=(356, 600, 3)  shape=(356, 600, 3, 1)
-    style_shapes = [(1,) + style.shape for style in styles]
+    style_shape = (1,) + style.shape
     content_features = {}  # 创建内容features map
-    style_features = [{} for _ in styles]  # 创建风格features map
+    style_feature ={}  # 创建风格features map
 
     vgg_weights, vgg_mean_pixel = vgg.load_net(network)  # 加载预训练模型，得到weights和mean_pixel
 
@@ -58,17 +58,17 @@ def stylize(network, content, styles, iterations,
             content_features[layer] = net[layer].eval(feed_dict={image: content_pre})  # content_features取值
 
     # compute style features in feedforward mode
-    for i in range(len(styles)):  # 计算style features
-        g = tf.Graph()
-        with g.as_default(), g.device('/cpu:0'), tf.Session() as sess:
-            image = tf.placeholder('float', shape=style_shapes[i])
-            net = vgg.net_preloaded(vgg_weights, image, pooling)  # pooling 默认为MAX
-            style_pre = np.array([vgg.preprocess(styles[i], vgg_mean_pixel)])  # styles[i]-vgg_mean_pixel
-            for layer in STYLE_LAYERS:
-                features = net[layer].eval(feed_dict={image: style_pre})
-                features = np.reshape(features, (-1, features.shape[3]))  # 根据通道数目reshape
-                gram = np.matmul(features.T, features) / features.size  # gram矩阵
-                style_features[i][layer] = gram
+    # 计算style features
+    g = tf.Graph()
+    with g.as_default(), g.device('/cpu:0'), tf.Session() as sess:
+        image = tf.placeholder('float', shape=style_shape)
+        net = vgg.net_preloaded(vgg_weights, image, pooling)  # pooling 默认为MAX
+        style_pre = np.array([vgg.preprocess(style, vgg_mean_pixel)])  # styles[i]-vgg_mean_pixel
+        for layer in STYLE_LAYERS:
+            features = net[layer].eval(feed_dict={image: style_pre})
+            features = np.reshape(features, (-1, features.shape[3]))  # 根据通道数目reshape
+            gram = np.matmul(features.T, features) / features.size  # gram矩阵
+            style_feature[layer] = gram
 
     # make stylized image using backpropogation
     with tf.Graph().as_default():
@@ -101,18 +101,18 @@ def stylize(network, content, styles, iterations,
                 启动net运算，得到了style的feature maps，由于style为不同filter响应的内积，
                 因此在这里增加了一步：gram = np.matmul(features.T, features) / features.size，即为style的feature。
                 '''
-        for i in range(len(styles)):
-            style_losses = []
-            for style_layer in STYLE_LAYERS:
-                layer = net[style_layer]
-                _, height, width, number = map(lambda i: i.value, layer.get_shape())
-                size = height * width * number
-                feats = tf.reshape(layer, (-1, number))
-                gram = tf.matmul(tf.transpose(feats), feats) / size  #求得生成图片的gram矩阵
-                style_gram = style_features[i][style_layer]
-                style_losses.append(
-                    style_layers_weights[style_layer] * 2 * tf.nn.l2_loss(gram - style_gram) / style_gram.size)
-            style_loss += style_weight * style_blend_weights[i] * reduce(tf.add, style_losses)
+
+        style_losses = []
+        for style_layer in STYLE_LAYERS:
+            layer = net[style_layer]
+            _, height, width, number = map(lambda i: i.value, layer.get_shape())
+            size = height * width * number
+            feats = tf.reshape(layer, (-1, number))
+            gram = tf.matmul(tf.transpose(feats), feats) / size  #求得生成图片的gram矩阵
+            style_gram = style_feature[style_layer]
+            style_losses.append(
+                style_layers_weights[style_layer] * 2 * tf.nn.l2_loss(gram - style_gram) / style_gram.size)
+        style_loss += style_weight * reduce(tf.add, style_losses)
 
         # total variation denoising
         tv_y_size = _tensor_size(image[:, 1:, :, :])

@@ -24,62 +24,53 @@ STYLE_SCALE = 1.0
 ITERATIONS = 1000
 VGG_PATH = 'imagenet-vgg-verydeep-19.mat'
 POOLING = 'max'
-
-
-def build_parser():
-    parser = ArgumentParser()
-    parser.add_argument('--content',
-                        dest='content', help='content image',
-                        metavar='CONTENT', required=True)
-    parser.add_argument('--styles',
-                        dest='styles',
-                        nargs='+', help='one or more style images',
-                        metavar='STYLE', required=True)
-    parser.add_argument('--output',
-                        dest='output', help='output path',
-                        metavar='OUTPUT', required=True)
-
-    return parser
+CONTENT_PATH = 'contents'
+STYLE_PATH = 'styles'
+OUTPUT_PATH = 'outputs'
 
 
 def main():
-    parser = build_parser()
-    options = parser.parse_args()
+    count = 0
+    while 1:
+        count += 1
+        content_path = os.path.join(CONTENT_PATH, str(count) + "-content.jpg")
+        style_path = os.path.join(STYLE_PATH, str(count) + "-style.jpg")
+        output_path=os.path.join(OUTPUT_PATH,str(count)+"-output.jpg")
+        if not os.path.exists(content_path) or not os.path.exists(style_path):
+            print("完成所有图片处理")
+            return
 
-    if not os.path.isfile(VGG_PATH):
-        parser.error("Where is the imagenet-vgg-verydeep-19.mat")
+        if not os.path.isfile(VGG_PATH):
+            print("Where is the imagenet-vgg-verydeep-19.mat")
+            return
 
-    content_image = imread(options.content)
-    style_images = [imread(style) for style in options.styles]
+        content_image = imread(content_path)
+        style_image = imread(style_path)
 
-    target_shape = content_image.shape
-    for i in range(len(style_images)):
+        target_shape = content_image.shape
         style_scale = STYLE_SCALE
-        style_images[i] = scipy.misc.imresize(style_images[i], style_scale *
-                                              target_shape[1] / style_images[i].shape[1])
+        style_image = scipy.misc.imresize(style_image, style_scale *
+                                          target_shape[1] / style_image.shape[1])
 
-    style_blend_weights = [1.0 / len(style_images) for _ in style_images]
-
-    for image in stylize(
-        network=VGG_PATH,
-        content=content_image,
-        styles=style_images,
-        iterations=ITERATIONS,
-        content_weight=CONTENT_WEIGHT,
-        content_weight_blend=CONTENT_WEIGHT_BLEND,
-        style_weight=STYLE_WEIGHT,
-        style_layer_weight_exp=STYLE_LAYER_WEIGHT_EXP,
-        style_blend_weights=style_blend_weights,
-        tv_weight=TV_WEIGHT,
-        learning_rate=LEARNING_RATE,
-        beta1=BETA1,
-        beta2=BETA2,
-        epsilon=EPSILON,
-        pooling=POOLING,
-    ):
-        continue
-
-    imsave(options.output, image)
+        for image in stylize(
+            network=VGG_PATH,
+            content=content_image,
+            style=style_image,
+            iterations=ITERATIONS,
+            content_weight=CONTENT_WEIGHT,
+            content_weight_blend=CONTENT_WEIGHT_BLEND,
+            style_weight=STYLE_WEIGHT,
+            style_layer_weight_exp=STYLE_LAYER_WEIGHT_EXP,
+            tv_weight=TV_WEIGHT,
+            learning_rate=LEARNING_RATE,
+            beta1=BETA1,
+            beta2=BETA2,
+            epsilon=EPSILON,
+            pooling=POOLING,
+        ):
+            continue
+        print("第"+str(count)+"张图片完成")
+        imsave(output_path, image)
 
 
 def imread(path):
