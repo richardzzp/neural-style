@@ -23,7 +23,7 @@ vgg.py： 定义了网络模型及相关的运算
 在本项目根目录下运行 
 
 ```
-pip install -r requirements.txt
+pip install -r dependencies.txt
 ```
 
 即可自动安装依赖。另外需要自行下载imagenet-vgg-verydeep-19.mat放在根目录
@@ -38,4 +38,3 @@ python neural_style.py
 
 即可运行，如果GPU加速不支持（会导致运行速度大幅度减慢），建议使用谷歌Colaboratory。
 
-### 
