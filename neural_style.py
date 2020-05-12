@@ -21,7 +21,7 @@ BETA1 = 0.9
 BETA2 = 0.999
 EPSILON = 1e-08
 STYLE_SCALE = 1.0
-ITERATIONS = 100
+ITERATIONS = 1000
 VGG_PATH = 'imagenet-vgg-verydeep-19.mat'
 POOLING = 'max'
 
@@ -60,7 +60,7 @@ def main():
 
     style_blend_weights = [1.0 / len(style_images) for _ in style_images]
 
-    for iteration, image, loss_vals in stylize(
+    for image in stylize(
         network=VGG_PATH,
         content=content_image,
         styles=style_images,

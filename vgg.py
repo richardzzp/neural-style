@@ -1,11 +1,7 @@
-# Copyright (c) 2015-2019 Anish Athalye. Released under GPLv3.
-
 import tensorflow as tf
 import numpy as np
 import scipy.io
 
-# work-around for more recent versions of tensorflow
-# https://github.com/tensorflow/tensorflow/issues/24496
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
@@ -25,6 +21,7 @@ VGG19_LAYERS = (
     'relu5_3', 'conv5_4', 'relu5_4'
 )
 
+##我们需要的信息是每层神经网络的kernels和bias
 def load_net(data_path):
     data = scipy.io.loadmat(data_path)
     if 'normalization' in data:
@@ -52,7 +49,7 @@ def net_preloaded(weights, input_image, pooling):
                 kernels, bias = weights[i][0][0][2][0]
             # matconvnet: weights are [width, height, in_channels, out_channels]
             # tensorflow: weights are [height, width, in_channels, out_channels]
-            kernels = np.transpose(kernels, (1, 0, 2, 3))
+            kernels = np.transpose(kernels, (1, 0, 2, 3))  #因为tf和mat的weights位置不一样，所以要进行转置
             bias = bias.reshape(-1)
             current = _conv_layer(current, kernels, bias)
         elif kind == 'relu':
